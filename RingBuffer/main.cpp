@@ -1,21 +1,36 @@
-#include <stdio.h>
+Ôªø#include <stdio.h>
 #include <string.h>
 #include <algorithm>
 #include <Windows.h>
 #include "Console.h"
 using namespace std;
 #define BUFSIZE 100
+#define GT_SIZE 100000
 
 char szScreenBuffer[dfSCREEN_HEIGHT][dfSCREEN_WIDTH];
 
-// T ¥¬ F,R ∞∞¿∫ ¿ßƒ°.
-// µ•¿Ã≈Õ¥¬ «◊ªÛ F∫Œ≈Õ Ω√¿€ R¿ßƒ°¥¬ µ•¿Ã≈Õ∏¶ ≥÷æÓæﬂ«“ ¿Âº“.
+// T Îäî F,R Í∞ôÏùÄ ÏúÑÏπò.
+// Îç∞Ïù¥ÌÑ∞Îäî Ìï≠ÏÉÅ FÎ∂ÄÌÑ∞ ÏãúÏûë RÏúÑÏπòÎäî Îç∞Ïù¥ÌÑ∞Î•º ÎÑ£Ïñ¥ÏïºÌï† Ïû•ÏÜå.
 
 void Buffer_Flip(void);
 
 void Buffer_Clear(void);
 
 void Sprite_Draw(int iX, int iY, char chSprite);
+
+// ===================== Ï†ïÎãµ Î∞∞Ïó¥ =====================
+char gt[GT_SIZE];
+int gtHead = 0, gtTail = 0;
+
+void GT_Push(const char* data, int size) {
+	memcpy(&gt[gtTail], data, size);
+	gtTail += size;
+}
+void GT_Pop(char* dest, int size) {
+	memcpy(dest, &gt[gtHead], size);
+	gtHead += size;
+}
+int GT_Size() { return gtTail - gtHead; }
 
 class RingBuffer {
 public:
@@ -38,10 +53,8 @@ public:
 	}
 
 	bool Enqueue(const char* pData, int iSize) {
-		// ¿Œ≈• ≈©±‚ > ≥≤¿∫ ∞¯∞£
+		// Ïù∏ÌÅê ÌÅ¨Í∏∞ > ÎÇ®ÏùÄ Í≥µÍ∞Ñ
 		if (iSize > BUFSIZE - 1 - GetDataSize()) {
-			cs_MoveCursor(0, 40); // ∞Ì¡§ ¿ßƒ°
-			printf("µ•¿Ã≈Õ∏¶ ≥÷¿ª∞¯∞£¿Ã ∫Œ¡∑«’¥œ¥Ÿ.");
 			return false;
 		}
 		int firstChunk = min(iSize, BUFSIZE - rear);
@@ -51,11 +64,8 @@ public:
 		return true;
 	}
 	bool Dequeue(char* pDest, int iSize) {
-		// µ≈• ≈©±‚ > ¿˙¿Â∑Æ
+		// ÎîîÌÅê ÌÅ¨Í∏∞ > Ï†ÄÏû•Îüâ
 		if (iSize > GetDataSize()) {
-
-			cs_MoveCursor(0, 40); // ∞Ì¡§ ¿ßƒ°
-			printf("ªÃæ∆≥æ µ•¿Ã≈Õ ∫Œ¡∑«’¥œ¥Ÿ.");
 			return false;
 		}
 		int firstChunk = min(iSize, BUFSIZE - front);
@@ -75,101 +85,14 @@ int main() {
 
 	cs_Initial();
 	RingBuffer ring;
-	char dummy[2 * BUFSIZE] = "TESTDATA";
-	for (int i = 0; i < 2 * BUFSIZE; i++)
-		dummy[i] = "TESTDATA"[i % 8];
-
-	char outBuf[2 * BUFSIZE] = {};
-	int enqSize = 30;
-	int deqSize = 30;
-
-	bool flag = true;
 	while (1) {
-		// µ≈• ª©¥¬∞≈ ¡∂¿˝
-		if (GetAsyncKeyState('Q') & 0x8000) { deqSize += 1; Sleep(100); }
-		if (GetAsyncKeyState('W') & 0x8000) { deqSize -= 1; Sleep(100); }
-		// ¿Œ≈• ≥÷¥¬∞≈ ¡∂¿˝
-		if (GetAsyncKeyState('E') & 0x8000) { enqSize += 1; Sleep(100); }
-		if (GetAsyncKeyState('R') & 0x8000) { enqSize -= 1; Sleep(100); }
-
-		if (GetAsyncKeyState('T') & 0x8000) { deqSize = BUFSIZE; Sleep(100); }
-		if (GetAsyncKeyState('Y') & 0x8000) { enqSize = BUFSIZE; Sleep(100); }
-
-		bool enqueueResult = false;
-		bool dequeueResult = false;
-		if (flag) {
-			enqueueResult = ring.Enqueue(dummy, enqSize);
-			if (!enqueueResult) {
-				__debugbreak();
-				break;
-			}
-			flag = false;
-
-
-		}
-		else {
-			dequeueResult = ring.Dequeue(outBuf, deqSize);
-			if (!dequeueResult) {
-				__debugbreak();
-				break;
-			}
-			flag = true;
-
-		}
 
 
 		Buffer_Clear();
 
-		// πˆ∆€ ºø ±◊∏Æ±‚
-		for (int i = 0; i < BUFSIZE; i++) {
-			char ch = ring.buffer[i];
-			Sprite_Draw(i, 5, ch);
-		}
-		// idx «•Ω√
-		for (int i = 0; i < BUFSIZE; i++) {
-			char idx = '*';
-			Sprite_Draw(i, 3, idx);
-		}
+		// Î≤ÑÌçº ÏÖÄ Í∑∏Î¶¨Í∏∞
 
-		// √§øˆ¡¯ ±∏∞£ '-' «•Ω√
-		if (ring.front < ring.rear) {
-			for (int i = ring.front; i < ring.rear; i++)
-				Sprite_Draw(i, 4, '-');
-		}
-		else if (ring.front > ring.rear) {
-			for (int i = ring.front; i < BUFSIZE; i++)
-				Sprite_Draw(i, 4, '-');
-			for (int i = 0; i < ring.rear; i++)
-				Sprite_Draw(i, 4, '-');
-		}
-		// F, R¿∫ ¿ßø° µ§æÓæ≤±‚
-		Sprite_Draw(ring.front, 4, 'F');
-		Sprite_Draw(ring.rear, 4, 'R');
-		if (ring.front == ring.rear) {
-			Sprite_Draw(ring.rear, 4, 'T');
-
-		}
 		Buffer_Flip();
-
-
-		if (flag) {
-			cs_MoveCursor(0, 20); // ∞Ì¡§ ¿ßƒ°
-			outBuf[deqSize] = '\0';
-			printf("µ≈• : %s", outBuf);
-			cs_MoveCursor(0, 40); // ∞Ì¡§ ¿ßƒ°
-			printf("µ•¿Ã≈Õ∏¶ ª∞Ω¿¥œ¥Ÿ. deqSize=%d deq=%s | πˆ∆€ ¿˙¿Â∑Æ=%d",
-				deqSize, dequeueResult ? "OK" : "FAIL", ring.GetDataSize());
-
-		}
-		else {
-
-			cs_MoveCursor(0, 20); // ∞Ì¡§ ¿ßƒ°
-			printf("¿Œ≈• : %.*s", enqSize, dummy);
-			cs_MoveCursor(0, 40); // ∞Ì¡§ ¿ßƒ°
-			printf("µ•¿Ã≈Õ∏¶ ≥÷æ˙Ω¿¥œ¥Ÿ. enqSize=%d enq=%s | πˆ∆€ ¿˙¿Â∑Æ=%d",
-				enqSize, enqueueResult ? "OK" : "FAIL", ring.GetDataSize());
-
-		}
 
 		Sleep(1000);
 	}
@@ -183,7 +106,7 @@ void Buffer_Flip(void)
 	for (iCnt = 0; iCnt < dfSCREEN_HEIGHT; iCnt++)
 	{
 		cs_MoveCursor(0, iCnt);
-		// %s æ»¿¸«œ∞‘ √≥∏Æ
+		// %s ÏïàÏ†ÑÌïòÍ≤å Ï≤òÎ¶¨
 		printf("%s", szScreenBuffer[iCnt]);
 	}
 }
@@ -206,4 +129,23 @@ void Sprite_Draw(int iX, int iY, char chSprite)
 		return;
 
 	szScreenBuffer[iY][iX] = chSprite;
+}
+
+void DrawLayout() {
+	system("cls");
+	cs_MoveCursor(0, 0);  wprintf(L"‚ïî‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïó");
+	cs_MoveCursor(0, 1);  wprintf(L"‚ïë         RingBuffer Validation Test           ‚ïë");
+	cs_MoveCursor(0, 2);  wprintf(L"‚ï†‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ï£");
+	cs_MoveCursor(0, 3);  wprintf(L"‚ïë Ïó∞ÏÇ∞:                                        ‚ïë");
+	cs_MoveCursor(0, 4);  wprintf(L"‚ïë ÌÅ¨Í∏∞:                                        ‚ïë");
+	cs_MoveCursor(0, 5);  wprintf(L"‚ïë Îç∞Ïù¥ÌÑ∞:                                      ‚ïë");
+	cs_MoveCursor(0, 6);  wprintf(L"‚ï†‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ï£");
+	cs_MoveCursor(0, 7);  wprintf(L"‚ïë ÎßÅÎ≤ÑÌçº Í≤∞Í≥º:                                 ‚ïë");
+	cs_MoveCursor(0, 8);  wprintf(L"‚ïë Ï†ïÎãµ   Í≤∞Í≥º:                                 ‚ïë");
+	cs_MoveCursor(0, 9);  wprintf(L"‚ï†‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ï£");
+	cs_MoveCursor(0, 10); wprintf(L"‚ïë ÌÖåÏä§Ìä∏ ÌöüÏàò:                                 ‚ïë");
+	cs_MoveCursor(0, 11); wprintf(L"‚ïë PASS:        FAIL:                           ‚ïë");
+	cs_MoveCursor(0, 12); wprintf(L"‚ï†‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ï£");
+	cs_MoveCursor(0, 13); wprintf(L"‚ïë ÏÉÅÌÉú:                                        ‚ïë");
+	cs_MoveCursor(0, 14); wprintf(L"‚ïö‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïù");
 }
