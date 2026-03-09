@@ -118,6 +118,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <Optimization>Disabled</Optimization>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -127,11 +129,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="AnswerEngine.cpp" />
     <ClCompile Include="Console.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="ringbuffer.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AnswerEngine.h" />
     <ClInclude Include="Console.h" />
+    <ClInclude Include="main.h" />
+    <ClInclude Include="ringbuffer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

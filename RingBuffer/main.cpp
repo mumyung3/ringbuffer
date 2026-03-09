@@ -1,134 +1,150 @@
-﻿#include <stdio.h>
-#include <string.h>
-#include <algorithm>
-#include <Windows.h>
-#include "Console.h"
-using namespace std;
-#define BUFSIZE 100
-#define GT_SIZE 100000
+﻿#include "main.h"
+char szScreenBuffer[dfSCREEN_HEIGHT][dfSCREEN_WIDTH] = {};
 
-char szScreenBuffer[dfSCREEN_HEIGHT][dfSCREEN_WIDTH];
+AnswerEngine answerObject{};
+RingBuffer rb{};
+int oldRbRear = 0;
+int oldAnswerObjectRear = 0;
 
-// T 는 F,R 같은 위치.
-// 데이터는 항상 F부터 시작 R위치는 데이터를 넣어야할 장소.
+void UpdateDisplay(const wchar_t* op, int size, const char* data,
+    const char* rbResult, const char* gtResult,
+    int total, int pass, int fail, bool isFail)
+{
+    // 연산
+    cs_MoveCursor(10, 3); wprintf(L"%-10s", op);
 
-void Buffer_Flip(void);
+    // 크기
+    cs_MoveCursor(10, 4); wprintf(L"%-5d", size);
 
-void Buffer_Clear(void);
+    // 데이터 (hex, 최대 20바이트)
+    cs_MoveCursor(10, 5);
+    int showLen = min(size, 20);
+    for (int i = 0; i < showLen; i++) wprintf(L"%02X ", (unsigned char)data[i]);
+    if (size > 20) wprintf(L"...");
+    wprintf(L"          ");
 
-void Sprite_Draw(int iX, int iY, char chSprite);
+    // 결과 비교 (Dequeue일 때만) 인큐일때 추카
+    cs_MoveCursor(14, 7);
+    if (rbResult) {
+        for (int i = 0; i < min(size, 20); i++) wprintf(L"%02X ", (unsigned char)rbResult[i]);
+        if (size > 20) wprintf(L"...");
+        wprintf(L"     ");
+    }
+    else {
+        for (int i = 0; i < min(size, 20); i++) wprintf(L"%02X ", (unsigned char)rb.buffer[(oldRbRear + i )% BUFSIZE]);
+        if (size > 20) wprintf(L"...");
+        wprintf(L"     ");
+    }
+    cs_MoveCursor(14, 8);
+    if (gtResult) {
+        for (int i = 0; i < min(size, 20); i++) wprintf(L"%02X ", (unsigned char)gtResult[i]);
+        if (size > 20) wprintf(L"...");
+        wprintf(L"     ");
+    }
+    else {
+        for (int i = 0; i < min(size, 20); i++) wprintf(L"%02X ", (unsigned char)answerObject.gt[oldAnswerObjectRear + i]);
+        if (size > 20) wprintf(L"...");
+        wprintf(L"     ");
+    }
 
-// ===================== 정답 배열 =====================
-char gt[GT_SIZE];
-int gtHead = 0, gtTail = 0;
+    // 통계
+    cs_MoveCursor(15, 10); wprintf(L"%-8d", total);
+    cs_MoveCursor(8, 11); wprintf(L"%-6d", pass);
+    cs_MoveCursor(21, 11); wprintf(L"%-6d", fail);
 
-void GT_Push(const char* data, int size) {
-	memcpy(&gt[gtTail], data, size);
-	gtTail += size;
+    // 상태
+    cs_MoveCursor(9, 13);
+    if (isFail) wprintf(L"★ FAIL - 불일치 발생! 테스트 중단          ");
+    else        wprintf(L"OK                                         ");
 }
-void GT_Pop(char* dest, int size) {
-	memcpy(dest, &gt[gtHead], size);
-	gtHead += size;
-}
-int GT_Size() { return gtTail - gtHead; }
 
-class RingBuffer {
-public:
-
-	RingBuffer() : front(0), rear(0), datasize(0) { memset(buffer, 0, BUFSIZE); }
-
-	int front;
-	int rear;
-	char buffer[BUFSIZE];
-	int datasize;
-	bool IsEmpty() {
-
-		if (front == rear) return true;
-		return false;
-	}
-	bool IsFull() {
-
-		if (front == (rear + 1) % BUFSIZE) return true;
-		return false;
-	}
-
-	bool Enqueue(const char* pData, int iSize) {
-		// 인큐 크기 > 남은 공간
-		if (iSize > BUFSIZE - 1 - GetDataSize()) {
-			return false;
-		}
-		int firstChunk = min(iSize, BUFSIZE - rear);
-		memcpy(&buffer[rear], pData, firstChunk);
-		memcpy(&buffer[0], pData + firstChunk, iSize - firstChunk);
-		rear = (rear + iSize) % BUFSIZE;
-		return true;
-	}
-	bool Dequeue(char* pDest, int iSize) {
-		// 디큐 크기 > 저장량
-		if (iSize > GetDataSize()) {
-			return false;
-		}
-		int firstChunk = min(iSize, BUFSIZE - front);
-		memcpy(pDest, &buffer[front], firstChunk);
-		memcpy(pDest + firstChunk, &buffer[0], iSize - firstChunk);
-		front = (front + iSize) % BUFSIZE;
-		return true;
-	}
-
-	int GetDataSize() {
-		datasize = (rear - front + BUFSIZE) % BUFSIZE;
-		return datasize;
-	}
-};
-
+// ===================== 메인 =====================
 int main() {
+    _setmode(_fileno(stdout), _O_U16TEXT);
 
-	cs_Initial();
-	RingBuffer ring;
-	while (1) {
+    cs_Initial();
+    srand((unsigned)time(nullptr));
+
+    int total = 0, pass = 0, fail = 0;
+
+    char enqData[MAX_CHUNK];
+    char rbBuf[MAX_CHUNK];
+    char gtBuf[MAX_CHUNK];
+
+    while (true) {
+        DrawLayout();
+
+        int op = rand() % 2;       // 0=Enqueue, 1=Dequeue
+        int size = rand() % MAX_CHUNK + 1;
+
+        if (op == 0) { // Enqueue
+            if (size > BUFSIZE - 1 - rb.GetDataSize()) continue;
+
+            // 정답배열 공간 부족
+            if (answerObject.gtTail + size > GT_SIZE) continue;
+
+            for (int i = 0; i < size; i++)
+                enqData[i] = (char)(rand() % 256);
+
+            oldRbRear = rb.rear;
+            rb.Enqueue(enqData, size);
+            oldAnswerObjectRear = answerObject.gtTail;
+            answerObject.GT_Push(enqData, size);
+
+            int firstChunk = min(size, BUFSIZE - oldRbRear);
+
+            bool isFail =!(
+                (memcmp(rb.buffer + oldRbRear, answerObject.gt + oldAnswerObjectRear, firstChunk) == 0) &&
+                (memcmp(rb.buffer, answerObject.gt + oldAnswerObjectRear + firstChunk, size - firstChunk) == 0));
+
+            if (isFail) {
+                fail++; 
+            }
+            else { pass++;  }
+
+            total++;
+
+            UpdateDisplay(L"Enqueue", size, enqData, nullptr, nullptr, total, pass, fail, isFail);
+            
+            if (isFail) {
+                cs_MoveCursor(0, 16);
+                wprintf(L"아무 키나 누르면 종료...");
+                _getwch();
+                return 1;
+            }
 
 
-		Buffer_Clear();
+        }
+        else { // Dequeue
+            if (size > rb.GetDataSize()) continue;
+            if (size > answerObject.GT_Size()) {
 
-		// 버퍼 셀 그리기
+                cs_MoveCursor(0, 16);
+                wprintf(L"정답 버퍼 공간 부족 ...");
+                _getwch();
+                return 1;
+            }
 
-		Buffer_Flip();
+            rb.Dequeue(rbBuf, size);
+            answerObject.GT_Pop(gtBuf, size);
+            total++;
 
-		Sleep(1000);
-	}
-	return 0;
-}
+            bool isFail = (memcmp(rbBuf, gtBuf, size) != 0);
+            if (isFail) fail++; else pass++;
 
+            UpdateDisplay(L"Dequeue", size, gtBuf, rbBuf, gtBuf, total, pass, fail, isFail);
 
-void Buffer_Flip(void)
-{
-	int iCnt;
-	for (iCnt = 0; iCnt < dfSCREEN_HEIGHT; iCnt++)
-	{
-		cs_MoveCursor(0, iCnt);
-		// %s 안전하게 처리
-		printf("%s", szScreenBuffer[iCnt]);
-	}
-}
+            if (isFail) {
+                cs_MoveCursor(0, 16);
+                wprintf(L"아무 키나 누르면 종료...");
+                _getwch();
+                return 1;
+            }
+        }
 
-void Buffer_Clear(void)
-{
-	int iCnt;
-	memset(szScreenBuffer, ' ', dfSCREEN_WIDTH * dfSCREEN_HEIGHT);
+        //Sleep(3000); // 너무 빠르면 화면 못봄, 원하면 제거
 
-	for (iCnt = 0; iCnt < dfSCREEN_HEIGHT; iCnt++)
-	{
-		szScreenBuffer[iCnt][dfSCREEN_WIDTH - 1] = '\0';
-	}
-
-}
-
-void Sprite_Draw(int iX, int iY, char chSprite)
-{
-	if (iX < 0 || iY < 0 || iX >= dfSCREEN_WIDTH - 1 || iY >= dfSCREEN_HEIGHT)
-		return;
-
-	szScreenBuffer[iY][iX] = chSprite;
+    }
 }
 
 void DrawLayout() {
