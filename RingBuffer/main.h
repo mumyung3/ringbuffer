@@ -8,7 +8,7 @@
 #include <ctime>
 #include <io.h>
 #include <fcntl.h>
-
+#include <conio.h>
 
 
 #define MAX_CHUNK 20 
