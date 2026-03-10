@@ -1,23 +1,39 @@
 #pragma once
-
 #include <algorithm>
 #include <Windows.h>
 
 #define BUFSIZE 100
-
+#define RINGBUFFER_ERROR_NOSPACE -1  // 인큐: 남은 공간 부족
+#define RINGBUFFER_ERROR_NODATA  -2  // 디큐: 데이터 부족
 class RingBuffer {
 public:
+    RingBuffer();
+    ~RingBuffer();
+    RingBuffer(int iBufferSize);
+    void Resize(int size);
 
-	RingBuffer();
+    int GetBufferSize();
+    int GetUseSize();
+    int GetFreeSize();
 
-	int front;
-	int rear;
-	char buffer[BUFSIZE];
-	int datasize;
-	bool IsEmpty();
-	bool IsFull();
-	bool Enqueue(const char* pData, int iSize);
-	bool Dequeue(char* pDest, int iSize);
+    int Enqueue(const char* chpData, int iSize);
+    int Dequeue(char* chpDest, int iSize);
+    int Peek(char* chpDest, int iSize);
 
-	int GetDataSize();
+    void ClearBuffer();
+
+    int DirectEnqueueSize();
+    int DirectDequeueSize();
+
+    int MoveRear(int iSize);
+    int MoveFront(int iSize);
+
+    char* GetFrontBufferPtr();
+    char* GetRearBufferPtr();
+
+public:
+    int front;
+    int rear;
+    int bufferSize;
+    char* buffer;
 };

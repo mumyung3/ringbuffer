@@ -23,7 +23,7 @@ void UpdateDisplay(const wchar_t* op, int size, const char* data,
     if (size > 20) wprintf(L"...");
     wprintf(L"          ");
 
-    // 결과 비교 (Dequeue일 때만) 인큐일때 추카
+    // 결과 비교 (Dequeue일 때만) 인큐일때 추가
     cs_MoveCursor(14, 7);
     if (rbResult) {
         for (int i = 0; i < min(size, 20); i++) wprintf(L"%02X ", (unsigned char)rbResult[i]);
@@ -31,7 +31,7 @@ void UpdateDisplay(const wchar_t* op, int size, const char* data,
         wprintf(L"     ");
     }
     else {
-        for (int i = 0; i < min(size, 20); i++) wprintf(L"%02X ", (unsigned char)rb.buffer[(oldRbRear + i )% BUFSIZE]);
+        for (int i = 0; i < min(size, 20); i++) wprintf(L"%02X ", (unsigned char)rb.buffer[(oldRbRear + i) % rb.bufferSize]);
         if (size > 20) wprintf(L"...");
         wprintf(L"     ");
     }
@@ -74,13 +74,11 @@ int main() {
     while (true) {
         DrawLayout();
 
-        int op = rand() % 2;       // 0=Enqueue, 1=Dequeue
+        int op = rand() % 2;
         int size = rand() % MAX_CHUNK + 1;
 
         if (op == 0) { // Enqueue
-            if (size > BUFSIZE - 1 - rb.GetDataSize()) continue;
-
-            // 정답배열 공간 부족
+            if (size > rb.GetFreeSize()) continue;
             if (answerObject.gtTail + size > GT_SIZE) continue;
 
             for (int i = 0; i < size; i++)
@@ -91,34 +89,28 @@ int main() {
             oldAnswerObjectRear = answerObject.gtTail;
             answerObject.GT_Push(enqData, size);
 
-            int firstChunk = min(size, BUFSIZE - oldRbRear);
+            int firstChunk = min(size, rb.bufferSize - oldRbRear);
 
-            bool isFail =!(
+            bool isFail = !(
                 (memcmp(rb.buffer + oldRbRear, answerObject.gt + oldAnswerObjectRear, firstChunk) == 0) &&
                 (memcmp(rb.buffer, answerObject.gt + oldAnswerObjectRear + firstChunk, size - firstChunk) == 0));
 
-            if (isFail) {
-                fail++; 
-            }
-            else { pass++;  }
-
+            if (isFail) fail++;
+            else pass++;
             total++;
 
             UpdateDisplay(L"Enqueue", size, enqData, nullptr, nullptr, total, pass, fail, isFail);
-            
+
             if (isFail) {
                 cs_MoveCursor(0, 16);
                 wprintf(L"아무 키나 누르면 종료...");
                 _getwch();
                 return 1;
             }
-
-
         }
         else { // Dequeue
-            if (size > rb.GetDataSize()) continue;
+            if (size > rb.GetUseSize()) continue;
             if (size > answerObject.GT_Size()) {
-
                 cs_MoveCursor(0, 16);
                 wprintf(L"정답 버퍼 공간 부족 ...");
                 _getwch();
@@ -142,28 +134,28 @@ int main() {
             }
         }
 
-        Sleep(100); // 너무 빠르면 화면 못봄, 원하면 제거
+        Sleep(100);
         if (_kbhit()) {
-            _getwch();  // 키 눌릴 때까지 대기
+            _getwch();
         }
     }
 }
 
 void DrawLayout() {
-	system("cls");
-	cs_MoveCursor(0, 0);  wprintf(L"╔══════════════════════════════════════════════╗");
-	cs_MoveCursor(0, 1);  wprintf(L"║         RingBuffer Validation Test           ║");
-	cs_MoveCursor(0, 2);  wprintf(L"╠══════════════════════════════════════════════╣");
-	cs_MoveCursor(0, 3);  wprintf(L"║ 연산:                                        ║");
-	cs_MoveCursor(0, 4);  wprintf(L"║ 크기:                                        ║");
-	cs_MoveCursor(0, 5);  wprintf(L"║ 데이터:                                      ║");
-	cs_MoveCursor(0, 6);  wprintf(L"╠══════════════════════════════════════════════╣");
-	cs_MoveCursor(0, 7);  wprintf(L"║ 링버퍼 결과:                                 ║");
-	cs_MoveCursor(0, 8);  wprintf(L"║ 정답   결과:                                 ║");
-	cs_MoveCursor(0, 9);  wprintf(L"╠══════════════════════════════════════════════╣");
-	cs_MoveCursor(0, 10); wprintf(L"║ 테스트 횟수:                                 ║");
-	cs_MoveCursor(0, 11); wprintf(L"║ PASS:        FAIL:                           ║");
-	cs_MoveCursor(0, 12); wprintf(L"╠══════════════════════════════════════════════╣");
-	cs_MoveCursor(0, 13); wprintf(L"║ 상태:                                        ║");
-	cs_MoveCursor(0, 14); wprintf(L"╚══════════════════════════════════════════════╝");
+    system("cls");
+    cs_MoveCursor(0, 0);  wprintf(L"╔══════════════════════════════════════════════╗");
+    cs_MoveCursor(0, 1);  wprintf(L"║         RingBuffer Validation Test           ║");
+    cs_MoveCursor(0, 2);  wprintf(L"╠══════════════════════════════════════════════╣");
+    cs_MoveCursor(0, 3);  wprintf(L"║ 연산:                                        ║");
+    cs_MoveCursor(0, 4);  wprintf(L"║ 크기:                                        ║");
+    cs_MoveCursor(0, 5);  wprintf(L"║ 데이터:                                      ║");
+    cs_MoveCursor(0, 6);  wprintf(L"╠══════════════════════════════════════════════╣");
+    cs_MoveCursor(0, 7);  wprintf(L"║ 링버퍼 결과:                                 ║");
+    cs_MoveCursor(0, 8);  wprintf(L"║ 정답   결과:                                 ║");
+    cs_MoveCursor(0, 9);  wprintf(L"╠══════════════════════════════════════════════╣");
+    cs_MoveCursor(0, 10); wprintf(L"║ 테스트 횟수:                                 ║");
+    cs_MoveCursor(0, 11); wprintf(L"║ PASS:        FAIL:                           ║");
+    cs_MoveCursor(0, 12); wprintf(L"╠══════════════════════════════════════════════╣");
+    cs_MoveCursor(0, 13); wprintf(L"║ 상태:                                        ║");
+    cs_MoveCursor(0, 14); wprintf(L"╚══════════════════════════════════════════════╝");
 }
